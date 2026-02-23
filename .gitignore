@@ -1,0 +1,31 @@
+# Results folder
+ars1-id/results/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Weights and Biases
+wandb/
+
+# Model checkpoints
+*.pth
+*.pt
+*.ckpt
+
+# Virtual environment
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
