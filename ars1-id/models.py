@@ -1,7 +1,3 @@
-"""
-Model architecture for intermediate fusion of CLIP and ELECTRA.
-"""
-
 import torch
 import torch.nn as nn
 
@@ -9,7 +5,7 @@ import torch.nn as nn
 class CLIPElectraFusion(nn.Module):
     
     def __init__(self, clip_model, electra_model,
-                 fusion_img_dim=512, fusion_text_dim=256,
+                 fusion_text_dim=256,
                  num_classes=2, freeze_encoders=True):
         super().__init__()
         self.clip = clip_model
@@ -21,23 +17,26 @@ class CLIPElectraFusion(nn.Module):
             for p in self.electra.parameters():
                 p.requires_grad = False
 
-        # CLIP dimensi output image featurenya 512
-        self.img_dim = 512
-        
-        # Projection layer untuk text saja (768 -> 256)
+        # CLIP dimensi output image feature (diambil dari config model, bukan hardcode)
+        self.img_dim = clip_model.config.projection_dim  # e.g. 512 untuk ViT-B/32, 768 untuk ViT-L/14
+
+        # ELECTRA hidden size (diambil dari config model, bukan hardcode)
+        electra_hidden_dim = electra_model.config.hidden_size  # e.g. 768
+
+        # Projection layer only text: (electra_hidden_dim -> fusion_text_dim)
         self.project_text = nn.Sequential(
-            nn.Linear(768, fusion_text_dim),
+            nn.Linear(electra_hidden_dim, fusion_text_dim),
             nn.GELU(),
             nn.LayerNorm(fusion_text_dim)
         )
 
-        # Fusion dimension: 512 (CLIP langsung) + 256 (text projected) = 768
+        # Fusion dimension: 512 (dimensi CLIP) + 256 (text projected) = 768
         self.fusion_dim = self.img_dim + fusion_text_dim
 
-        # Positional embedding for 2 tokens (image + text)
+        # Positional embedding untuk 2 tokens (image + text)
         self.pos_embedding = nn.Parameter(torch.randn(1, 2, self.fusion_dim))
 
-        # 2-layer Transformer for fusion
+        # 2-layer Transformer untuk fusion
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=self.fusion_dim,
             nhead=8,
@@ -60,7 +59,16 @@ class CLIPElectraFusion(nn.Module):
 
     def forward(self, pixel_values, input_ids, attention_mask):
 
-        img_feats = self.clip.get_image_features(pixel_values)
+        # Extract image features from CLIP
+        img_output = self.clip.get_image_features(pixel_values)
+        # Handle case where output might be an object instead of tensor
+        if hasattr(img_output, 'pooler_output'):
+            img_feats = img_output.pooler_output
+        elif isinstance(img_output, torch.Tensor):
+            img_feats = img_output
+        else:
+            img_feats = img_output[0] if isinstance(img_output, (tuple, list)) else img_output
+        
         # Normalisasi  (L2 normalization)
         img_proj = img_feats / (img_feats.norm(dim=-1, keepdim=True) + 1e-10)
 

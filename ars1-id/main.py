@@ -57,8 +57,8 @@ class Config:
     NUM_CLASSES = 2
     IMAGE_SIZE = 224
     SEED = 42
-    NUM_WORKERS = 2
-    PATIENCE = 3
+    NUM_WORKERS = 4
+    PATIENCE = 5
     
     # Model Architecture Parameters
     FUSION_IMG_DIM = 512
@@ -142,7 +142,7 @@ def load_data(config):
 
 def main():
     """Main training function."""
-    parser = argparse.ArgumentParser(description='Train Intermediate Fusion Model')
+    parser = argparse.ArgumentParser(description='Train Multimodal Fusion Model')
     parser.add_argument('--images_dir', type=str, default=None, 
                         help='Path to images directory')
     parser.add_argument('--labels_csv', type=str, default=None, 
@@ -155,7 +155,7 @@ def main():
                         help='Learning rate for pretrained layers')
     parser.add_argument('--lr_head', type=float, default=None, 
                         help='Learning rate for head layers')
-    parser.add_argument('--wandb_project', type=str, default='intermediate-fusion', 
+    parser.add_argument('--wandb_project', type=str, default='THESIS ELSA_Multimodal', 
                         help='W&B project name')
     parser.add_argument('--wandb_name', type=str, default=None, 
                         help='W&B run name')
@@ -203,7 +203,7 @@ def main():
     use_wandb = not args.no_wandb
     if use_wandb:
         # Auto-include model name in wandb run name if not provided
-        wandb_run_name = args.wandb_name if args.wandb_name else 'p1-ars1-id'
+        wandb_run_name = args.wandb_name if args.wandb_name else 'ubahnum-workers'
         
         wandb.init(
             project=args.wandb_project,

@@ -1,17 +1,9 @@
-"""
-Model architecture 2 - Alternative fusion approach.
-TODO: Implement alternative architecture here
-"""
-
 import torch
 import torch.nn as nn
 
 
 class CLIPElectraFusion(nn.Module):
-    """
-    Alternative fusion architecture - Model 2
-    TODO: Implement different fusion strategy
-    """
+
     
     def __init__(self, clip_model, electra_model,
                  fusion_img_dim=512, fusion_text_dim=256,
@@ -51,10 +43,17 @@ class CLIPElectraFusion(nn.Module):
         Forward pass - customize based on your architecture
         Must return: logits, img_features, text_features
         """
-        # TODO: Implement forward pass
+        # Extract image features from CLIP
+        img_output = self.clip.get_image_features(pixel_values)
+        # Handle case where output might be an object instead of tensor
+        if hasattr(img_output, 'pooler_output'):
+            img_feats = img_output.pooler_output
+        elif isinstance(img_output, torch.Tensor):
+            img_feats = img_output
+        else:
+            img_feats = img_output[0] if isinstance(img_output, (tuple, list)) else img_output
         
-        # Placeholder implementation
-        img_feats = self.clip.get_image_features(pixel_values)
+        # L2 normalization
         img_proj = img_feats / (img_feats.norm(dim=-1, keepdim=True) + 1e-10)
         
         txt_out = self.electra(input_ids=input_ids, attention_mask=attention_mask)
