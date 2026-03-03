@@ -1,7 +1,3 @@
-"""
-Evaluation and metrics module.
-"""
-
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
@@ -31,17 +27,20 @@ def evaluate(model, loader, criterion, device):
         loss = criterion(logits, labels)
         
         total_loss += loss.item()
-        preds.extend(logits.argmax(-1).detach().cpu().tolist())
-        trues.extend(labels.detach().cpu().tolist())
+        preds.extend(logits.argmax(-1).cpu().tolist())  # detach() redundant under @torch.no_grad()
+        trues.extend(labels.cpu().tolist())
     
     acc = accuracy_score(trues, preds)
     p, r, f1, _ = precision_recall_fscore_support(trues, preds, average='binary', zero_division=0)
-    cm = confusion_matrix(trues, preds)
-    
-    return total_loss / len(loader), acc, p, r, f1, cm, preds, trues
+    cm = confusion_matrix(trues, preds, labels=[0, 1])  # fix: pastikan selalu 2x2 meski 1 kelas tidak muncul
+
+    avg_loss = total_loss / len(loader) if len(loader) > 0 else 0.0  # fix: ZeroDivisionError guard
+    return avg_loss, acc, p, r, f1, cm, preds, trues
 
 
-def plot_confusion_matrix(cm, class_names=['NON-SELF-HARM', 'SELF-HARM'], save_path=None):
+def plot_confusion_matrix(cm, class_names=None, save_path=None):
+    if class_names is None:
+        class_names = ['NON-SELF-HARM', 'SELF-HARM']  # fix: hindari mutable default argument
     plt.figure(figsize=(8, 6))
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
                 xticklabels=class_names, yticklabels=class_names)
@@ -56,13 +55,6 @@ def plot_confusion_matrix(cm, class_names=['NON-SELF-HARM', 'SELF-HARM'], save_p
 
 
 def plot_training_history(history, save_path=None):
-    """
-    Plot training history including loss and accuracy curves.
-    
-    Args:
-        history: Dictionary containing training history
-        save_path: Path to save the plot (optional)
-    """
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
     
     epochs = range(1, len(history['train_loss']) + 1)
@@ -90,23 +82,16 @@ def plot_training_history(history, save_path=None):
     plt.show()
 
 
-def print_classification_report(trues, preds, class_names=['NON-SELF-HARM', 'SELF-HARM']):
-    """
-    Print detailed classification report.
-    
-    Args:
-        trues: True labels
-        preds: Predicted labels
-        class_names: List of class names
-    """
+def print_classification_report(trues, preds, class_names=None):
+    if class_names is None:
+        class_names = ['NON-SELF-HARM', 'SELF-HARM']  # fix: hindari mutable default argument
     print("\nClassification Report:")
-    print("=" * 60)
     print(classification_report(trues, preds, target_names=class_names))
 
 
 def analyze_model_parameters(model):
 
-    print("MODEL PARAMETER ANALYSIS")
+    print("MODEL PARAMETER ")
 
     def count(p_list):
         return sum(p.numel() for p in p_list)
@@ -123,7 +108,6 @@ def analyze_model_parameters(model):
     print(f"ELECTRA Encoder:     {count(electra_params):,} params | "
           f"Trainable: {count([p for p in electra_params if p.requires_grad]):,}")
 
-    # CLIP tidak punya projection lagi (langsung 512 dim)
     # Hanya text projection
     proj_text_params = list(model.project_text.parameters())
 

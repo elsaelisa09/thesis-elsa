@@ -1,7 +1,3 @@
-"""
-Data loading and preprocessing module for multimodal dataset.
-"""
-
 import os
 import torch
 from torch.utils.data import Dataset

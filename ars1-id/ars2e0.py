@@ -1,87 +1,71 @@
+"ARSITEKTUR B SIMPEL FUSION, TEXT ONLY + MLP CLASSIFIER" 
+
 import torch
 import torch.nn as nn
 
 
-class CLIPElectraMLPFusion(nn.Module):
+class TextOnlyElectra(nn.Module):
+
     def __init__(self, clip_model, electra_model,
                  fusion_text_dim=256,
                  num_classes=2, freeze_encoders=True):
         super().__init__()
-        self.clip = clip_model
-        self.electra = electra_model
 
+        # CLIP disimpan tapi dibekukan total dan TIDAK digunakan di forward
+        self.clip = clip_model
+        for p in self.clip.parameters():
+            p.requires_grad = False
+
+        # ELECTRA  encoder ang aktif
+        self.electra = electra_model
         if freeze_encoders:
-            for p in self.clip.parameters():
-                p.requires_grad = False
             for p in self.electra.parameters():
                 p.requires_grad = False
 
-        # CLIP dimensi output image feature
-        self.img_dim = clip_model.config.projection_dim  # 512
+        electra_hidden_dim = electra_model.config.hidden_size  # 768
 
-        # ELECTRA dimensi output text feature
-        electra_hidden_dim = electra_model.config.hidden_size  # e.g. 768
-
-        # Projection layer text: (electra_hidden_dim -> fusion_text_dim : 256)
+        # Projection: 768 -> fusion_text_dim (256)
         self.project_text = nn.Sequential(
             nn.Linear(electra_hidden_dim, fusion_text_dim),
             nn.GELU(),
             nn.LayerNorm(fusion_text_dim)
         )
 
-        # Fusion dimension: 512 (CLIP) + 256 (text projected) = 768
-        self.fusion_dim = self.img_dim + fusion_text_dim
-
-        # 3-layer MLP classifier (langsung dari concat fitur)
+        # 3-layer MLP classifier (sama seperti di CLIPElectraFusion tapi input = fusion_text_dim)
         self.classifier = nn.Sequential(
-            nn.Linear(self.fusion_dim, self.fusion_dim // 2),  # 768 -> 384
+            nn.Linear(fusion_text_dim, fusion_text_dim // 2),        # 256 -> 128
             nn.GELU(),
             nn.Dropout(0.3),
-            nn.Linear(self.fusion_dim // 2, self.fusion_dim // 4),  # 384 -> 192
+            nn.Linear(fusion_text_dim // 2, fusion_text_dim // 4),   # 128 -> 64
             nn.GELU(),
             nn.Dropout(0.2),
-            nn.Linear(self.fusion_dim // 4, num_classes)  # 192 -> num_classes
+            nn.Linear(fusion_text_dim // 4, num_classes)              # 64 -> num_classes
         )
 
     def forward(self, pixel_values, input_ids, attention_mask):
+        # pixel_values diterima tapi TIDAK diproses (saluran gambar dinonaktifkan)
 
-        # --- Image Encoder (CLIP) ---
-        img_output = self.clip.get_image_features(pixel_values)
-        if hasattr(img_output, 'pooler_output'):
-            img_feats = img_output.pooler_output
-        elif isinstance(img_output, torch.Tensor):
-            img_feats = img_output
-        else:
-            img_feats = img_output[0] if isinstance(img_output, (tuple, list)) else img_output
-
-        # L2 normalization
-        img_proj = img_feats / (img_feats.norm(dim=-1, keepdim=True) + 1e-10)
-        # Shape: (batch_size, 512)
-
-        # --- Text Encoder (ELECTRA) ---
+        # Extract text features dari ELECTRA
         txt_out = self.electra(input_ids=input_ids, attention_mask=attention_mask)
         last_hidden = txt_out.last_hidden_state
-        # Shape: (batch_size, seq_len, 768)
+        # Shape: (batch_size, sequence_length, 768)
 
-        # Mean pooling (exclude padding tokens)
+        # Mean pooling (sama seperti di CLIPElectraFusion)
         attn = attention_mask.unsqueeze(-1).float()
         sum_emb = (last_hidden * attn).sum(dim=1)
         sum_mask = attn.sum(dim=1).clamp(min=1e-9)
         text_emb = sum_emb / sum_mask
         # Shape: (batch_size, 768)
 
-        # Project text: 768 -> 256
+        # Project text 768 -> 256
         text_proj = self.project_text(text_emb)
         # Shape: (batch_size, 256)
 
-        # --- Fusion: Concatenate image + text ---
-        fused = torch.cat([img_proj, text_proj], dim=-1)
-        # Shape: (batch_size, 768)
+        # Langsung ke MLP classifier (tanpa fusion transformer)
+        logits = self.classifier(text_proj)
 
-        # --- MLP Classifier ---
-        logits = self.classifier(fused)
-
-        return logits, img_proj, text_proj
+        # Return logits + None placeholder untuk img_proj agar kompatibel dengan train loop
+        return logits, None, text_proj
 
 
 class EarlyStopping:

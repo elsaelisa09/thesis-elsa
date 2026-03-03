@@ -1,7 +1,3 @@
-"""
-Training module for the multimodal fusion model.
-"""
-
 import torch
 import torch.nn as nn
 from tqdm import tqdm

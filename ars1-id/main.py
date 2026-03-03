@@ -1,7 +1,3 @@
-"""
-Main training script for the Intermediate Fusion model.
-"""
-
 import os
 import random
 import argparse
@@ -13,16 +9,10 @@ from torch.utils.data import DataLoader
 from sklearn.model_selection import train_test_split
 from transformers import CLIPProcessor, CLIPModel, AutoTokenizer, AutoModel
 import wandb
-
 from data_loader import MultiModalDataset, collate_batch
+from ars1e2 import CLIPElectraMLPFusion, EarlyStopping  
+MODEL_NAME = 'E2'  
 
-# ============= MODEL SELECTION =============
-# Uncomment the model you want to use:
-from models import CLIPElectraFusion, EarlyStopping  # Model 1 (Transformer Fusion)
-# from model2 import CLIPElectraFusion, EarlyStopping  # Model 2 (Alternative)
-# from model3 import CLIPElectraFusion, EarlyStopping  # Model 3
-MODEL_NAME = 'model1'  # Change this to match your model
-# ===========================================
 
 from train import train_one_epoch, setup_optimizer, setup_scheduler
 from evaluation import (
@@ -34,9 +24,7 @@ from evaluation import (
 )
 
 
-class Config:
-    """Configuration class for training parameters."""
-    
+class Config: 
     # Paths
     CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
     RESULTS_DIR = os.path.join(CURRENT_DIR, 'results')
@@ -45,7 +33,7 @@ class Config:
     LABELS_CSV = os.path.join(DATASET_DIR, 'fix-review-manual-label.csv')
     
     # Model Configuration
-    MODEL_NAME = MODEL_NAME  # From import section above
+    MODEL_NAME = MODEL_NAME  
     
     # Training Parameters
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -61,12 +49,14 @@ class Config:
     PATIENCE = 5
     
     # Model Architecture Parameters
-    FUSION_IMG_DIM = 512
     FUSION_TEXT_DIM = 256
+
+    # Pretrained model names 
+    CLIP_MODEL_NAME = 'openai/clip-vit-base-patch32'
+    ELECTRA_MODEL_NAME = 'sentinet/suicidality'
 
 
 def set_seed(seed):
-    """Set random seeds for reproducibility."""
     torch.manual_seed(seed)
     random.seed(seed)
     np.random.seed(seed)
@@ -111,11 +101,8 @@ def load_data(config):
         label_name = 'NON-SELF-HARM' if label == 0 else 'SELF-HARM'
         print(f'  {label} ({label_name}): {count} ({count/len(val_df)*100:.1f}%)')
     
-    clip_model_name = 'openai/clip-vit-base-patch32'
-    electra_model_name = 'sentinet/suicidality'
-    
-    clip_processor = CLIPProcessor.from_pretrained(clip_model_name)
-    electra_tokenizer = AutoTokenizer.from_pretrained(electra_model_name)
+    clip_processor = CLIPProcessor.from_pretrained(config.CLIP_MODEL_NAME)
+    electra_tokenizer = AutoTokenizer.from_pretrained(config.ELECTRA_MODEL_NAME)
     
     train_ds = MultiModalDataset(
         train_df, config.IMAGES_DIR, electra_tokenizer, 
@@ -141,7 +128,6 @@ def load_data(config):
 
 
 def main():
-    """Main training function."""
     parser = argparse.ArgumentParser(description='Train Multimodal Fusion Model')
     parser.add_argument('--images_dir', type=str, default=None, 
                         help='Path to images directory')
@@ -162,9 +148,9 @@ def main():
     parser.add_argument('--no_wandb', action='store_true', 
                         help='Disable W&B logging')
     parser.add_argument('--notes', type=str, default=None, 
-                        help='percobaan1')
+                        help='Notes for this training run')
     parser.add_argument('--tags', type=str, nargs='+', default=None, 
-                        help='thesis')
+                        help='Tags for W&B run (e.g. --tags thesis experiment1)')
     args = parser.parse_args()
     
     config = Config()
@@ -203,7 +189,7 @@ def main():
     use_wandb = not args.no_wandb
     if use_wandb:
         # Auto-include model name in wandb run name if not provided
-        wandb_run_name = args.wandb_name if args.wandb_name else 'ubahnum-workers'
+        wandb_run_name = args.wandb_name if args.wandb_name else 'training ars1e2'
         
         wandb.init(
             project=args.wandb_project,
@@ -221,7 +207,8 @@ def main():
                 'image_size': config.IMAGE_SIZE,
                 'seed': config.SEED,
                 'patience': config.PATIENCE,
-                'fusion_img_dim': config.FUSION_IMG_DIM,
+                'clip_model': config.CLIP_MODEL_NAME,
+                'electra_model': config.ELECTRA_MODEL_NAME,
                 'fusion_text_dim': config.FUSION_TEXT_DIM,
             }
         )
@@ -240,17 +227,13 @@ def main():
     train_loader, val_loader, clip_processor, electra_tokenizer = load_data(config)
     
     print('\nLoading pretrained models...')
-    clip_model_name = 'openai/clip-vit-base-patch32'
-    electra_model_name = 'sentinet/suicidality'
-    
-    clip_model = CLIPModel.from_pretrained(clip_model_name)
-    electra_model = AutoModel.from_pretrained(electra_model_name)
+    clip_model = CLIPModel.from_pretrained(config.CLIP_MODEL_NAME)
+    electra_model = AutoModel.from_pretrained(config.ELECTRA_MODEL_NAME)
     
     print('Initializing fusion model...')
-    model = CLIPElectraFusion(
+    model = CLIPElectraMLPFusion(
         clip_model=clip_model,
         electra_model=electra_model,
-        fusion_img_dim=config.FUSION_IMG_DIM,
         fusion_text_dim=config.FUSION_TEXT_DIM,
         num_classes=config.NUM_CLASSES,
         freeze_encoders=True
@@ -346,7 +329,7 @@ def main():
     print(f'Best model saved to: {best_model_path}')
     
     print('\nLoading best model for final evaluation...')
-    checkpoint = torch.load(best_model_path)
+    checkpoint = torch.load(best_model_path, map_location=config.DEVICE)  # fix: safe across CPU/GPU
     model.load_state_dict(checkpoint['model_state_dict'])
     
     _, val_acc, p, r, f1, cm, val_preds, val_trues = evaluate(
