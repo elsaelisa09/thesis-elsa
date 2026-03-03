@@ -11,7 +11,7 @@ from transformers import CLIPProcessor, CLIPModel, AutoTokenizer, AutoModel
 import wandb
 from data_loader import MultiModalDataset, collate_batch
 from ars1e3 import CLIPElectraFusion, EarlyStopping  
-MODEL_NAME = 'ArsitekturA_Bd_txt_img'  
+MODEL_NAME = 'ArsitekturA_Imd_txt_img'  
 
 
 from train import train_one_epoch, setup_optimizer, setup_scheduler
@@ -29,8 +29,8 @@ class Config:
     CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
     RESULTS_DIR = os.path.join(CURRENT_DIR, 'results')
     DATASET_DIR = os.path.join(os.path.dirname(CURRENT_DIR), 'dataset')
-    IMAGES_DIR = os.path.join(DATASET_DIR, 'datasetbalanced')
-    LABELS_CSV = os.path.join(DATASET_DIR, 'datasetbalanced.csv')
+    IMAGES_DIR = os.path.join(DATASET_DIR, 'fix-review-manual-label')
+    LABELS_CSV = os.path.join(DATASET_DIR, 'fix-review-manual-label.csv')
     
     # Model Configuration
     MODEL_NAME = MODEL_NAME  
@@ -189,7 +189,7 @@ def main():
     use_wandb = not args.no_wandb
     if use_wandb:
         # Auto-include model name in wandb run name if not provided
-        wandb_run_name = args.wandb_name if args.wandb_name else 'ars1e3 bldata text-image'
+        wandb_run_name = args.wandb_name if args.wandb_name else 'ars1e3 imbdata text-image'
         
         wandb.init(
             project=args.wandb_project,

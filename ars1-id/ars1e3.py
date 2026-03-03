@@ -89,8 +89,8 @@ class CLIPElectraFusion(nn.Module):
         text_proj = self.project_text(text_emb)
 
         # Urutan Positional Embedding + Fusion
-        img_token = torch.cat([torch.zeros_like(text_proj),img_proj], dim=-1) #[text, img]
-        text_token = torch.cat([text_proj, torch.zeros_like(img_proj)], dim=-1) #[text, img]
+        text_token = torch.cat([text_proj, torch.zeros_like(img_proj)], dim=-1)
+        img_token = torch.cat([torch.zeros_like(text_proj), img_proj], dim=-1)
 
         # Stack tokens and add positional embedding
         tokens = torch.stack([text_token, img_token], dim=1)
