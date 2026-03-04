@@ -8,7 +8,8 @@ class TextOnlyElectra(nn.Module):
 
     def __init__(self, clip_model, electra_model,
                  fusion_text_dim=256,
-                 num_classes=2, freeze_encoders=True):
+                 num_classes=2, freeze_encoders=True,
+                 num_unfreeze_last_electra_layers=4):
         super().__init__()
 
         # CLIP disimpan tapi dibekukan total dan TIDAK digunakan di forward
@@ -23,6 +24,16 @@ class TextOnlyElectra(nn.Module):
         if freeze_encoders:
             for p in self.electra.parameters():
                 p.requires_grad = False
+        
+        # Unfreeze sebagian layer terakhir ELECTRA saja jika diinginkan
+        # num_unfreeze_last_electra_layers=2 akan unfreeze layer 10-11 dari 12 layer (0-indexed)
+        if num_unfreeze_last_electra_layers > 0:
+            num_total_layers = self.electra.config.num_hidden_layers  # 12
+            layers_to_unfreeze = list(range(num_total_layers - num_unfreeze_last_electra_layers, num_total_layers))
+            for layer_idx in layers_to_unfreeze:
+                for p in self.electra.encoder.layer[layer_idx].parameters():
+                    p.requires_grad = True
+            print(f"✓ Unfroze ELECTRA layers: {layers_to_unfreeze}")
 
         electra_hidden_dim = electra_model.config.hidden_size  # 768
 

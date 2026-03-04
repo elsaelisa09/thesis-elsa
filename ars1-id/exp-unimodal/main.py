@@ -51,7 +51,7 @@ class Config:
     # Model name otomatis sesuai mode
     @property
     def MODEL_NAME(self):
-        return 'ArsitekturB_Imd_Textonly' if self.DATASET_MODE == 'text_only' else 'ArsitekturB_Imd_Imageonly'
+        return 'trialllldws' if self.DATASET_MODE == 'text_only' else 'ArsitekturB_Imd_Imageonly'
 
     # Model Architecture Parameters
     FUSION_TEXT_DIM = 256
